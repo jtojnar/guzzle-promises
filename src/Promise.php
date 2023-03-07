@@ -22,7 +22,7 @@ class Promise implements PromiseInterface
     private $waitFn;
     /** @var ?array<Promise<mixed, mixed>>: void */
     private $waitList;
-    /** @var ?array<array{}> */
+    /** @var ?array<PromiseHandler<mixed, mixed>> */
     private $handlers = [];
 
     /**
@@ -43,7 +43,7 @@ class Promise implements PromiseInterface
     ) {
         if ($this->state === self::PENDING) {
             $p = new Promise(null, [$this, 'cancel']);
-            $this->handlers[] = [$p, $onFulfilled, $onRejected];
+            $this->handlers[] = new PromiseHandler($p, $onFulfilled, $onRejected);
             $p->waitList = $this->waitList;
             $p->waitList[] = $this;
             return $p;
@@ -159,7 +159,7 @@ class Promise implements PromiseInterface
             // It's a success, so resolve the handlers in the queue.
             Utils::queue()->add(static function () use ($id, $value, $handlers) {
                 foreach ($handlers as $handler) {
-                    self::callHandler($id, $value, $handler);
+                    $handler->call($id, $value);
                 }
             });
         } elseif ($value instanceof Promise && Is::pending($value)) {
@@ -170,58 +170,15 @@ class Promise implements PromiseInterface
             $value->then(
                 static function ($value) use ($handlers) {
                     foreach ($handlers as $handler) {
-                        self::callHandler(1, $value, $handler);
+                        $handler->call(1, $value);
                     }
                 },
                 static function ($reason) use ($handlers) {
                     foreach ($handlers as $handler) {
-                        self::callHandler(2, $reason, $handler);
+                        $handler->call(2, $reason);
                     }
                 }
             );
-        }
-    }
-
-    /**
-     * Call a stack of handlers using a specific callback index and value.
-     *
-     * @param int   $index   1 (resolve) or 2 (reject).
-     * @param mixed $value   Value to pass to the callback.
-     * @param array $handler Array of handler data (promise and callbacks).
-     */
-    private static function callHandler($index, $value, array $handler)
-    {
-        /** @var PromiseInterface $promise */
-        $promise = $handler[0];
-
-        // The promise may have been cancelled or resolved before placing
-        // this thunk in the queue.
-        if (Is::settled($promise)) {
-            return;
-        }
-
-        try {
-            if (isset($handler[$index])) {
-                /*
-                 * If $f throws an exception, then $handler will be in the exception
-                 * stack trace. Since $handler contains a reference to the callable
-                 * itself we get a circular reference. We clear the $handler
-                 * here to avoid that memory leak.
-                 */
-                $f = $handler[$index];
-                unset($handler);
-                $promise->resolve($f($value));
-            } elseif ($index === 1) {
-                // Forward resolution values as-is.
-                $promise->resolve($value);
-            } else {
-                // Forward rejections down the chain.
-                $promise->reject($value);
-            }
-        } catch (\Throwable $reason) {
-            $promise->reject($reason);
-        } catch (\Exception $reason) {
-            $promise->reject($reason);
         }
     }
 
