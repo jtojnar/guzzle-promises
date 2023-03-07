@@ -10,6 +10,9 @@ namespace GuzzleHttp\Promise;
  * the reason why the promise cannot be fulfilled.
  *
  * @link https://promisesaplus.com/
+ *
+ * @template ValueType
+ * @template ReasonType
  */
 interface PromiseInterface
 {
@@ -21,10 +24,13 @@ interface PromiseInterface
      * Appends fulfillment and rejection handlers to the promise, and returns
      * a new promise resolving to the return value of the called handler.
      *
-     * @param callable $onFulfilled Invoked when the promise fulfills.
-     * @param callable $onRejected  Invoked when the promise is rejected.
+     * @template NewValueType
+     * @template NewReasonType
      *
-     * @return PromiseInterface
+     * @param ?callable(ValueType): (NewValueType|PromiseInterface<NewValueType, NewReasonType>) $onFulfilled Invoked when the promise fulfills.
+     * @param ?callable(ReasonType): (NewValueType|PromiseInterface<NewValueType, NewReasonType>) $onRejected  Invoked when the promise is rejected.
+     *
+     * @return PromiseInterface<($onFulfilled is null ? ValueType : NewValueType), ($onRejected is null ? ReasonType : NewReasonType)>
      */
     public function then(
         callable $onFulfilled = null,
@@ -37,9 +43,11 @@ interface PromiseInterface
      * or to its original fulfillment value if the promise is instead
      * fulfilled.
      *
-     * @param callable $onRejected Invoked when the promise is rejected.
+     * @template NewReasonType
      *
-     * @return PromiseInterface
+     * @param callable(ReasonType): (ValueType|PromiseInterface<ValueType, NewReasonType>) $onRejected Invoked when the promise is rejected.
+     *
+     * @return PromiseInterface<ValueType, NewReasonType>
      */
     public function otherwise(callable $onRejected);
 
@@ -57,6 +65,7 @@ interface PromiseInterface
      * Resolve the promise with the given value.
      *
      * @param mixed $value
+     * @param ValueType $value
      *
      * @throws \RuntimeException if the promise is already resolved.
      */
@@ -66,6 +75,7 @@ interface PromiseInterface
      * Reject the promise with the given reason.
      *
      * @param mixed $reason
+     * @param ReasonType $reason
      *
      * @throws \RuntimeException if the promise is already resolved.
      */
@@ -89,6 +99,7 @@ interface PromiseInterface
      * @param bool $unwrap
      *
      * @return mixed
+     * @return ($unwrap is true ? ValueType : void)
      *
      * @throws \LogicException if the promise has no wait function or if the
      *                         promise does not settle after waiting.
